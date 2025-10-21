@@ -1,5 +1,11 @@
 # tec-WareGame
-text war game running on the tec1
+
+
+<img width="1024" height="1536" alt="image" src="https://github.com/user-attachments/assets/a4374c51-00ba-43de-b471-33e0027f6cf1" />
+
+
+
+A text war game running on the tec1, what!
 
 
 Excellent question — designing a **text-based wargame** benefits enormously from a solid conceptual model before you start coding. Let’s outline both the **approach** and two visuals: an **ASCII flowchart** and a **state diagram**.
