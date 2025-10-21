@@ -173,6 +173,4 @@ function main():
 
 ---
 
-Would you like me to **refine this into actual Mint-Forth style pseudocode**, or **expand the ASCII flowchart** to include multiple units, morale, and logistics (a more advanced tactical wargame loop)?
-
-
+ 
