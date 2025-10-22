@@ -1,4 +1,4 @@
-```octave
+ 
 % Text War Game with ASCII Map and Movement
 % Features: 5x5 grid map, movement (N,S,E,W), proximity-based attack, recurring menu, status
 % Run in Octave: save as 'war_game.m' and execute 'war_game'
@@ -293,4 +293,3 @@ endfunction
 
 % Run the game
 main();
-```
