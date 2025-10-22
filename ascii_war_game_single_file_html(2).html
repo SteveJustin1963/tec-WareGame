@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ASCII War Game</title>
+<style>
+  body { background: black; color: #0f0; font-family: monospace; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+  #controls { color: #0f0; width: 100%; text-align: center; background: #030; border-bottom: 1px solid #0f0; padding: 6px 0; position: relative; z-index: 10; }
+  #board { white-space: pre; font-size: 16px; line-height: 1; margin-top: 4px; }
+  button { margin-left: 20px; background:#030; color:#0f0; border:1px solid #0f0; padding:4px 8px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="controls">
+  <span id="hud">Health: 1000</span><br>
+  Use W/A/S/D or Arrow Keys to move • Space to attack • R = Respawn Map • w = Build wall block<br>
+  @ = You • E = Enemy • F = Food • ^ = Mountain • ~ = River • o = Lake • █ = Wall (impassable)
+  <button onclick="respawnMap()">Respawn Map</button>
+</div>
+<pre id="board"></pre>
+<script>
+const CHARS = { empty:' ', player:'@', enemy:'E', food:'F', mountain:'^', river:'~', lake:'o', wall:'█' };
+let player = { x:0, y:0, health:1000, moves:0 };
+let enemies = [], foods = [], walls = [], rivers = [];
+let heightmap = new Map();
+let seed = Math.random()*10000;
+const board = document.getElementById('board');
+const hud = document.getElementById('hud');
+
+function noise2D(x, y){ return Math.abs(Math.sin(x*12.9898 + y*78.233 + seed)*43758.5453)%1; }
+function fractalNoise(x,y,octaves=5,scale=0.02,persistence=0.55){ let total=0, amplitude=1, freq=scale, max=0; for(let i=0;i<octaves;i++){ total += noise2D(x*freq,y*freq)*amplitude; max+=amplitude; amplitude*=persistence; freq*=2; } return total/max; }
+function getHeight(x,y){ const key=x+','+y; if(heightmap.has(key))return heightmap.get(key); const h=fractalNoise(x,y,6,0.02,0.55); heightmap.set(key,h); return h; }
+function isMountain(x,y){ const h=getHeight(x,y); return h<0.3 && noise2D(Math.floor(x/4),Math.floor(y/4))<0.55; }
+function isWall(x,y){ for(const pattern of walls){ for(const w of pattern){ if(w.x===x && w.y===y) return true; } } return false; }
+function addWallBlock(x,y){ walls.push([{x,y}]); }
+function findFreeSpotAround(x,y){ const dirs=[[1,0],[-1,0],[0,1],[0,-1]]; for(const [dx,dy] of dirs){ const tx=x+dx, ty=y+dy; const t=tile(tx,ty); if(t===' '||t==='~'||t==='o') return {x:tx,y:ty}; } return {x,y}; }
+function generateWalls(){ walls=[]; for(let i=0;i<8;i++){ let x=Math.floor(Math.random()*400-200); let y=Math.floor(Math.random()*400-200); const pattern=[]; const w=4+Math.floor(Math.random()*4); const h=4+Math.floor(Math.random()*4); for(let dx=0;dx<w;dx++){ for(let dy=0;dy<h;dy++){ if(Math.random()>0.3)pattern.push({x:x+dx,y:y+dy}); } } walls.push(pattern);} }
+
+function generateRivers(){ rivers=[]; const sources=[]; for(let i=0;i<8;i++){ let x=Math.floor(Math.random()*400-200); let y=Math.floor(Math.random()*400-200); if(getHeight(x,y)<0.45) continue; sources.push({x,y}); } for(const src of sources){ let x=src.x,y=src.y; const path=[]; for(let j=0;j<30;j++){ path.push({x,y}); const gradX=getHeight(x+1,y)-getHeight(x-1,y); const gradY=getHeight(x,y+1)-getHeight(x,y-1); if(Math.abs(gradX)+Math.abs(gradY)<0.02) break; x += gradX>0?1:-1; y += gradY>0?1:-1; if(Math.random()<0.2){x+=Math.sign(Math.random()-0.5);y+=Math.sign(Math.random()-0.5);} } for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++) path.push({x:x+dx,y:y+dy,lake:true}); rivers.push(path);} }
+
+function generateFoods(){ foods=[]; for(let i=0;i<25;i++){ let x=Math.floor(Math.random()*400-200); let y=Math.floor(Math.random()*400-200); if(!isMountain(x,y)&&!isWall(x,y)) foods.push({x,y}); } }
+
+function addFoodEvery100Steps(){ if(player.moves % 100 === 0){ const range = 300; const x = player.x + Math.floor(Math.random()*range - range/2); const y = player.y + Math.floor(Math.random()*range - range/2); if(!isMountain(x,y) && !isWall(x,y) && !foods.some(f=>f.x===x&&f.y===y)) foods.push({x,y}); } }
+
+function isRiver(x,y){ for(const path of rivers){ for(const seg of path){ if(!seg.lake && Math.abs(seg.x-x)<=1 && Math.abs(seg.y-y)<=1) return true; } } return false; }
+function isLake(x,y){ for(const path of rivers){ for(const seg of path){ if(seg.lake && Math.abs(seg.x-x)<=1 && Math.abs(seg.y-y)<=1) return true; } } return false; }
+
+function tile(x,y){ if(enemies.some(e=>e.x===x&&e.y===y))return CHARS.enemy; if(foods.some(f=>f.x===x&&f.y===y))return CHARS.food; if(isMountain(x,y))return CHARS.mountain; if(isWall(x,y))return CHARS.wall; if(isLake(x,y))return CHARS.lake; if(isRiver(x,y))return CHARS.river; return CHARS.empty; }
+
+function canSee(a,b,c,d){ let x0=a,y0=b,x1=c,y1=d; let dx=Math.abs(x1-x0), dy=Math.abs(y1-y0); let sx=x0<x1?1:-1, sy=y0<y1?1:-1; let err=dx-dy; while(true){ if(isMountain(x0,y0)||isWall(x0,y0))return false; if(x0===x1&&y0===y1)return true; const e2=2*err; if(e2>-dy){err-=dy;x0+=sx;} if(e2<dx){err+=dx;y0+=sy;} } }
+
+function generateEnemiesAround(px,py,radius=50){ enemies=[]; for(let y=py-radius;y<=py+radius;y++){ for(let x=px-radius;x<=px+radius;x++){ const n=noise2D(x,y); if(n>=0.05 && n<0.06){ enemies.push({x,y,hp:3,alerted:false,lastTouch:false}); } } } }
+function moveEnemy(e,dx,dy){ const nx=e.x+dx,ny=e.y+dy; const t=tile(nx,ny); if(t===' '||t==='~'||t==='o'){ e.x=nx;e.y=ny; } }
+function enemyAI(){ for(const e of enemies){ const d=Math.abs(e.x-player.x)+Math.abs(e.y-player.y); if(d<=10 && canSee(e.x,e.y,player.x,player.y)) e.alerted=true; if(e.alerted){ if(!canSee(e.x,e.y,player.x,player.y)) continue; const dx=Math.sign(player.x-e.x); const dy=Math.sign(player.y-e.y); moveEnemy(e,dx,dy); if(Math.abs(e.x-player.x)<=1 && Math.abs(e.y-player.y)<=1){ if(!e.lastTouch){ player.health=Math.max(0,player.health-1); e.lastTouch=true; setTimeout(()=>e.lastTouch=false,1000); } } } } }
+
+function render(){ let view=''; const width=Math.floor(window.innerWidth/10); const height=Math.floor(window.innerHeight/16); const halfW=Math.floor(width/2); const halfH=Math.floor(height/2); for(let y=player.y-halfH;y<=player.y+halfH;y++){ for(let x=player.x-halfW;x<=player.x+halfW;x++){ if(x===player.x&&y===player.y)view+=CHARS.player; else view+=tile(x,y);} view+='\n'; } board.textContent=view; hud.textContent = `Health: ${player.health}`; if(player.health<=0){ setTimeout(()=>{ alert('You died! Respawning...'); respawnMap(); }, 500); } }
+
+function move(dx,dy){ const nx=player.x+dx,ny=player.y+dy; const t=tile(nx,ny); if(t!=='^' && t!=='█'){ player.x=nx;player.y=ny; player.moves++; addFoodEvery100Steps(); if(player.moves%10===0){ player.health=Math.max(0,player.health-1); } if(t==='~' || t==='o'){ player.health=Math.max(0,player.health-3); } eatFood(); } enemyAI();render(); }
+
+function eatFood(){ const foodIndex = foods.findIndex(f=>f.x===player.x && f.y===player.y); if(foodIndex>-1){ foods.splice(foodIndex,1); player.health=Math.min(1000,player.health+100); } }
+
+function attack(){ const dirs=[[1,0],[-1,0],[0,1],[0,-1]]; for(const[dx,dy]of dirs){ const t=enemies.find(e=>e.x===player.x+dx&&e.y===player.y+dy); if(t){t.hp--;player.health=Math.max(0,player.health-1);if(t.hp<=0)enemies=enemies.filter(e=>e!==t);break;} } render(); }
+
+function buildWallHere(){ addWallBlock(player.x, player.y); player.health=Math.max(0,player.health-5); const next=findFreeSpotAround(player.x,player.y); player.x=next.x; player.y=next.y; render(); }
+
+function respawnMap(){ seed=Math.random()*10000; heightmap.clear(); generateWalls(); generateRivers(); generateFoods(); generateEnemiesAround(0,0); player.x=0;player.y=0; player.health=1000; player.moves=0; render(); }
+
+document.addEventListener('keydown', e => {
+  if (e.code==='Space'||e.key.startsWith('Arrow')) e.preventDefault();
+  if (e.code==='Space'){attack();return;}
+  if (e.key==='ArrowUp'||e.key==='W'){move(0,-1);return;}
+  if (e.key==='ArrowDown'||e.key==='S'){move(0,1);return;}
+  if (e.key==='ArrowLeft'||e.key==='A'){move(-1,0);return;}
+  if (e.key==='ArrowRight'||e.key==='D'){move(1,0);return;}
+  if (e.key==='r'||e.key==='R'){respawnMap();return;}
+  if (e.key==='w'){buildWallHere(); return;}
+});
+
+window.addEventListener('resize',render);
+
+generateWalls();
+generateRivers();
+generateFoods();
+generateEnemiesAround(0,0);
+render();
+</script>
+</body>
+</html>
